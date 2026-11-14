@@ -64,6 +64,7 @@ export const activationRequest = defineType({
       description: 'يُملأ تلقائيًا بعد إتمام العارض إنشاء معرضه.',
       type: 'reference',
       to: [{type: 'exhibition'}],
+      weak: true,
       readOnly: true,
     }),
   ],

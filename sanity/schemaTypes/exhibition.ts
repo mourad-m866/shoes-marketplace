@@ -38,6 +38,7 @@ export const exhibition = defineType({
       title: 'طلب التفعيل',
       type: 'reference',
       to: [{type: 'activationRequest'}],
+      weak: true,
       readOnly: true,
     }),
     defineField({
