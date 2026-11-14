@@ -12,6 +12,10 @@ import {structureTool} from 'sanity/structure'
 import {apiVersion, dataset, projectId} from './sanity/env'
 import {schema} from './sanity/schemaTypes'
 import {structure} from './sanity/structure'
+import {
+  DeleteActivationRequestAction,
+  DeleteExhibitionAction,
+} from './sanity/actions/delete-linked-documents'
 import {SendActivationEmailAction} from './sanity/actions/send-activation-email'
 
 export default defineConfig({
@@ -21,10 +25,24 @@ export default defineConfig({
   // Add and edit the content schema in the './sanity/schemaTypes' folder
   schema,
   document: {
-    actions: (previous, context) =>
-      context.schemaType === 'activationRequest'
-        ? [...previous, SendActivationEmailAction]
-        : previous,
+    actions: (previous, context) => {
+      if (context.schemaType === 'exhibition') {
+        return previous.map((action) =>
+          action.action === 'delete' ? DeleteExhibitionAction : action,
+        )
+      }
+
+      if (context.schemaType === 'activationRequest') {
+        return [
+          ...previous.map((action) =>
+            action.action === 'delete' ? DeleteActivationRequestAction : action,
+          ),
+          SendActivationEmailAction,
+        ]
+      }
+
+      return previous
+    },
   },
   plugins: [
     structureTool({structure}),
