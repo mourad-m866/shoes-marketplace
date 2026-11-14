@@ -10,6 +10,7 @@ export interface Exhibition {
   _id: string
   storeName: string
   sellerName: string
+  email?: string
   city: string
   phone: string
   description?: string
@@ -50,3 +51,12 @@ export interface UpdateShoeInput extends CreateShoeInput {
 export type ActionResult =
   | {status: 'success'; message: string; shoeId?: string}
   | {status: 'error'; message: string}
+
+export type SellerActivationResult =
+  | ActionResult
+  | {
+      status: 'setup'
+      message: string
+      suggestedSellerName?: string
+      suggestedStoreName?: string
+    }

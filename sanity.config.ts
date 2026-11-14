@@ -12,6 +12,7 @@ import {structureTool} from 'sanity/structure'
 import {apiVersion, dataset, projectId} from './sanity/env'
 import {schema} from './sanity/schemaTypes'
 import {structure} from './sanity/structure'
+import {SendActivationEmailAction} from './sanity/actions/send-activation-email'
 
 export default defineConfig({
   basePath: '/studio',
@@ -19,6 +20,12 @@ export default defineConfig({
   dataset,
   // Add and edit the content schema in the './sanity/schemaTypes' folder
   schema,
+  document: {
+    actions: (previous, context) =>
+      context.schemaType === 'activationRequest'
+        ? [...previous, SendActivationEmailAction]
+        : previous,
+  },
   plugins: [
     structureTool({structure}),
     // Vision is for querying with GROQ from inside the Studio

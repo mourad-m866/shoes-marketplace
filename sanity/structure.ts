@@ -12,4 +12,5 @@ export const structure: StructureResolver = (S) =>
         ),
       S.divider(),
       S.documentTypeListItem('shoe').title('الأحذية'),
+      S.documentTypeListItem('activationRequest').title('طلبات تحتاج التفعيل'),
     ])
