@@ -168,10 +168,12 @@ export function SellerAccessGate() {
                       inputMode="tel"
                       required
                       maxLength={16}
-                      pattern="\\+[1-9][0-9]{7,14}"
+                      pattern="[+][1-9][0-9]{7,14}"
                       title="أدخل الرقم الدولي مع علامة + ورمز الدولة."
                       value={phone}
-                      onChange={(event) => setPhone(event.target.value)}
+                      onChange={(event) =>
+                        setPhone(event.target.value.replace(/\s+/g, ''))
+                      }
                       className={inputClassName}
                       dir="ltr"
                     />
@@ -275,9 +277,13 @@ export function SellerAccessGate() {
                     autoComplete="tel"
                     inputMode="tel"
                     required
-                    maxLength={30}
+                    maxLength={16}
+                    pattern="[+][1-9][0-9]{7,14}"
+                    title="أدخل الرقم الدولي مع علامة + ورمز الدولة."
                     value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
+                    onChange={(event) =>
+                      setPhone(event.target.value.replace(/\s+/g, ''))
+                    }
                     className={inputClassName}
                     dir="ltr"
                   />

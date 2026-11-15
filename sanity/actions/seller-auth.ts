@@ -5,7 +5,6 @@ import { createHash } from 'node:crypto'
 import type { ActionResult, Exhibition, SellerActivationResult } from '@/lib/types'
 import {
   isValidInternationalPhone,
-  isValidLoginPhone,
   normalizePhone,
 } from '@/lib/phone'
 import { setSellerSession } from '@/lib/seller-session'
@@ -145,7 +144,7 @@ export async function authenticateSeller(
 
   const phone = normalizePhone(submittedPhone)
   const accessCode = submittedCode.trim()
-  if (!isValidLoginPhone(phone) || !accessCode || accessCode.length > 128) {
+  if (!isValidInternationalPhone(phone) || !accessCode || accessCode.length > 128) {
     return {status: 'error', message: INVALID_CODE_MESSAGE}
   }
 

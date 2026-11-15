@@ -1,6 +1,9 @@
 import {defineField, defineType} from 'sanity'
 import {UserIcon} from '@sanity/icons/User'
 
+import {isValidInternationalPhone} from '@/lib/phone'
+import {PhoneInput} from '../components/phone-input'
+
 export const activationRequest = defineType({
   name: 'activationRequest',
   title: 'طلبات تحتاج التفعيل',
@@ -18,9 +21,10 @@ export const activationRequest = defineType({
       title: 'رقم واتساب',
       description: 'أدخل الرقم بصيغته الدولية مع رمز الدولة، بدءًا من علامة +.',
       type: 'string',
+      components: {input: PhoneInput},
       validation: (rule) =>
-        rule.required().max(16).custom((value) =>
-          typeof value === 'string' && /^\+[1-9]\d{7,14}$/.test(value)
+        rule.required().max(30).custom((value) =>
+          typeof value === 'string' && isValidInternationalPhone(value)
             ? true
             : 'أدخل رقم واتساب دوليًا يبدأ بـ + ورمز الدولة.',
         ),

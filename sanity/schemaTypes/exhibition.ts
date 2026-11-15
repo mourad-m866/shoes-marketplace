@@ -1,7 +1,9 @@
 import { defineField, defineType } from 'sanity'
 import { TrolleyIcon } from '@sanity/icons/Trolley'
 
+import { isValidInternationalPhone } from '@/lib/phone'
 import { AccessCodeInput } from '../components/access-code-input'
+import { PhoneInput } from '../components/phone-input'
 
 /**
  * المعرض (معرض) — represents a shoe seller / exhibition booth.
@@ -43,9 +45,15 @@ export const exhibition = defineType({
     }),
     defineField({
       name: 'phone',
-      title: 'رقم الهاتف',
+      title: 'رقم واتساب',
       type: 'string',
-      validation: (rule) => rule.required().min(6).max(30),
+      components: { input: PhoneInput },
+      validation: (rule) =>
+        rule.required().max(30).custom((value) =>
+          typeof value === 'string' && isValidInternationalPhone(value)
+            ? true
+            : 'أدخل رقم واتساب دوليًا يبدأ بـ + ورمز الدولة.',
+        ),
     }),
     defineField({
       name: 'accessCode',
