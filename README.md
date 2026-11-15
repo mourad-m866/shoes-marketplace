@@ -34,3 +34,13 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Activation email
+
+The Sanity Studio's **إرسال رسالة التفعيل للعارض** action sends email through Resend. Configure these environment variables in Vercel (and in `.env.local` for local testing):
+
+- `RESEND_API_KEY`: an API key from Resend.
+- `ACTIVATION_EMAIL_FROM`: a sender address on a domain verified with Resend, for example `Steps Marketplace <activation@example.com>`.
+- `NEXT_PUBLIC_SITE_URL` (recommended): the public site URL, for example `https://example.com`. If omitted, the app uses Vercel's deployment URL or the current request origin.
+
+The email is sent only for a published, approved activation request whose activation code matches the request.

@@ -1,5 +1,7 @@
 'use client'
 
+import {useState} from 'react'
+import {useToast} from '@sanity/ui/toast'
 import type {DocumentActionComponent, SanityDocument} from 'sanity'
 
 interface ActivationRequestDocument extends SanityDocument {
@@ -8,7 +10,13 @@ interface ActivationRequestDocument extends SanityDocument {
   accessCode?: string
 }
 
+interface SendEmailResponse {
+  message?: string
+}
+
 export const SendActivationEmailAction: DocumentActionComponent = (props) => {
+  const [isSending, setIsSending] = useState(false)
+  const toast = useToast()
   const published = props.published as ActivationRequestDocument | null
   const draft = props.draft as ActivationRequestDocument | null
   const valuesAreSaved =
@@ -22,29 +30,52 @@ export const SendActivationEmailAction: DocumentActionComponent = (props) => {
     Boolean(published.accessCode?.trim()) &&
     valuesAreSaved
 
+  async function sendActivationEmail() {
+    if (!canSend || !published?._id || !published.accessCode || isSending) return
+
+    setIsSending(true)
+    try {
+      const response = await fetch('/api/activation-email', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          requestId: published._id,
+          accessCode: published.accessCode,
+        }),
+      })
+      const result = (await response.json()) as SendEmailResponse
+
+      if (!response.ok) {
+        throw new Error(result.message || 'تعذّر إرسال رسالة التفعيل.')
+      }
+
+      toast.push({
+        status: 'success',
+        title: result.message || 'تم إرسال رسالة التفعيل إلى بريد العارض.',
+      })
+      props.onComplete()
+    } catch (cause) {
+      console.error('[sendActivationEmail] failed', cause)
+      toast.push({
+        status: 'error',
+        title: 'تعذّر إرسال رسالة التفعيل',
+        description:
+          cause instanceof Error
+            ? cause.message
+            : 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.',
+        duration: 10000,
+      })
+    } finally {
+      setIsSending(false)
+    }
+  }
+
   return {
-    label: 'إرسال رسالة التفعيل للعارض',
+    label: isSending ? 'جارٍ إرسال رسالة التفعيل…' : 'إرسال رسالة التفعيل للعارض',
     title: canSend
-      ? 'فتح رسالة تفعيل جاهزة في تطبيق البريد'
+      ? 'إرسال رسالة التفعيل مباشرة إلى البريد الإلكتروني المسجل'
       : 'انشر الطلب بحالة مقبول وأدخل البريد وكود التفعيل أولًا',
-    disabled: !canSend,
-    onHandle: () => {
-      if (!canSend || !published?.email || !published.accessCode) return
-
-      const activationUrl = `${window.location.origin}/seller`
-      const subject = 'تفعيل معرضك في خطواتك للمعارض'
-      const body = [
-        'مرحبًا،',
-        '',
-        'تمت الموافقة على طلب تفعيل معرضك في خطواتك للمعارض.',
-        `رابط الموقع: ${activationUrl}`,
-        `البريد الإلكتروني: ${published.email}`,
-        `كود التفعيل: ${published.accessCode}`,
-        '',
-        'استخدم خيار «لدي كود تفعيل مسبق» لإتمام إنشاء معرضك.',
-      ].join('\n')
-
-      window.location.href = `mailto:${encodeURIComponent(published.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-    },
+    disabled: !canSend || isSending,
+    onHandle: sendActivationEmail,
   }
 }
