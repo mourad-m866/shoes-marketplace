@@ -20,6 +20,14 @@ export const CATEGORY_FILTERS = [ALL_CATEGORIES, ...SHOE_CATEGORIES] as const
 /** Every shoe size the platform supports, used to build the size filter. */
 export const SHOE_SIZES = [36, 37, 38, 39, 40, 41, 42, 43, 44, 45] as const
 
+export const MAX_SHOE_IMAGE_SIZE = 4 * 1024 * 1024
+export const SHOE_IMAGE_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/avif',
+] as const
+
 /** Currency formatting for prices. */
 export const CURRENCY = 'د.ل'
 

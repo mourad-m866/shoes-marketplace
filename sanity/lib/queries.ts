@@ -103,6 +103,7 @@ export const sellerShoesQuery = defineQuery(`
 
 export const shoeExhibitionQuery = defineQuery(`
   *[_type == "shoe" && _id == $shoeId][0] {
-    "exhibitionId": exhibition._ref
+    "exhibitionId": exhibition._ref,
+    "imageRef": image.asset._ref
   }
 `)

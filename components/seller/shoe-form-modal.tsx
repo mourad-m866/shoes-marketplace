@@ -1,14 +1,20 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import Image from 'next/image'
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 
-import { SHOE_CATEGORIES, SHOE_SIZES } from '@/lib/constants'
+import {
+  MAX_SHOE_IMAGE_SIZE,
+  SHOE_CATEGORIES,
+  SHOE_IMAGE_MIME_TYPES,
+  SHOE_SIZES,
+} from '@/lib/constants'
 import type { ActionResult, Exhibition, Shoe } from '@/lib/types'
 
 import { createShoe, updateShoe } from '@/sanity/actions/shoes'
+import { sanityImageLoader } from '@/sanity/lib/image'
 
 interface ShoeFormModalProps {
-  open: boolean
   onClose: () => void
   exhibitions: Exhibition[]
   /** When set, the modal edits this shoe instead of creating a new one. */
@@ -21,7 +27,7 @@ interface FormState {
   price: string
   exhibitionId: string
   description: string
-  imageUrl: string
+  imageFile: File | null
   sizes: number[]
   isAvailable: boolean
 }
@@ -32,7 +38,7 @@ const EMPTY_FORM: FormState = {
   price: '',
   exhibitionId: '',
   description: '',
-  imageUrl: '',
+  imageFile: null,
   sizes: [],
   isAvailable: true,
 }
@@ -42,57 +48,110 @@ const EMPTY_FORM: FormState = {
  * one. Submissions go through the `createShoe` / `updateShoe` server actions.
  */
 export function ShoeFormModal({
-  open,
   onClose,
   exhibitions,
   editingShoe,
 }: ShoeFormModalProps) {
-  const [form, setForm] = useState<FormState>(EMPTY_FORM)
+  const [form, setForm] = useState<FormState>(() =>
+    editingShoe
+      ? {
+          title: editingShoe.title,
+          category: editingShoe.category,
+          price: String(editingShoe.price),
+          exhibitionId: editingShoe.exhibitionId ?? '',
+          description: editingShoe.description ?? '',
+          imageFile: null,
+          sizes: editingShoe.sizes ?? [],
+          isAvailable: editingShoe.isAvailable,
+        }
+      : {
+          ...EMPTY_FORM,
+          exhibitionId: exhibitions[0]?._id ?? '',
+        },
+  )
   const [result, setResult] = useState<ActionResult | null>(null)
   const [isPending, startTransition] = useTransition()
   const dialogRef = useRef<HTMLDivElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const imagePreviewRef = useRef<string | null>(null)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
 
   const isEditing = Boolean(editingShoe)
 
-  useEffect(() => {
-    if (!open) return
-
-    setResult(null)
-
-    if (editingShoe) {
-      setForm({
-        title: editingShoe.title,
-        category: editingShoe.category,
-        price: String(editingShoe.price),
-        exhibitionId: editingShoe.exhibitionId ?? '',
-        description: editingShoe.description ?? '',
-        imageUrl: editingShoe.imageRef ?? '',
-        sizes: editingShoe.sizes ?? [],
-        isAvailable: editingShoe.isAvailable,
-      })
-    } else {
-      setForm({
-        ...EMPTY_FORM,
-        exhibitionId: exhibitions[0]?._id ?? '',
-      })
+  const handleClose = useCallback(() => {
+    if (imagePreviewRef.current) {
+      URL.revokeObjectURL(imagePreviewRef.current)
+      imagePreviewRef.current = null
     }
-  }, [editingShoe, exhibitions, open])
+
+    setImagePreviewUrl(null)
+    setForm((previous) => ({...previous, imageFile: null}))
+    if (imageInputRef.current) imageInputRef.current.value = ''
+    onClose()
+  }, [onClose])
 
   useEffect(() => {
-    if (!open) return
+    return () => {
+      if (imagePreviewRef.current) {
+        URL.revokeObjectURL(imagePreviewRef.current)
+      }
+    }
+  }, [])
 
+  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') handleClose()
     }
 
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onClose, open])
-
-  if (!open) return null
+  }, [handleClose])
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((previous) => ({...previous, [key]: value}))
+  }
+
+  function clearImageSelection() {
+    if (imagePreviewRef.current) {
+      URL.revokeObjectURL(imagePreviewRef.current)
+      imagePreviewRef.current = null
+    }
+
+    setImagePreviewUrl(null)
+    update('imageFile', null)
+    if (imageInputRef.current) imageInputRef.current.value = ''
+  }
+
+  function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0]
+    if (!file) return
+
+    if (!SHOE_IMAGE_MIME_TYPES.some((type) => type === file.type)) {
+      clearImageSelection()
+      setResult({
+        status: 'error',
+        message: 'صيغة الصورة غير مدعومة. استخدم JPEG أو PNG أو WebP أو AVIF.',
+      })
+      return
+    }
+
+    if (file.size > MAX_SHOE_IMAGE_SIZE) {
+      clearImageSelection()
+      setResult({
+        status: 'error',
+        message: 'يجب ألا يتجاوز حجم الصورة 4 ميغابايت.',
+      })
+      return
+    }
+
+    if (imagePreviewRef.current) {
+      URL.revokeObjectURL(imagePreviewRef.current)
+    }
+    const previewUrl = URL.createObjectURL(file)
+    imagePreviewRef.current = previewUrl
+    setImagePreviewUrl(previewUrl)
+    update('imageFile', file)
+    setResult(null)
   }
 
   function toggleSize(size: number) {
@@ -113,7 +172,7 @@ export function ShoeFormModal({
     payload.set('price', form.price)
     payload.set('exhibitionId', form.exhibitionId)
     payload.set('description', form.description)
-    payload.set('imageUrl', form.imageUrl)
+    if (form.imageFile) payload.set('imageFile', form.imageFile)
     payload.set('sizes', form.sizes.join(','))
     if (form.isAvailable) payload.set('isAvailable', 'on')
     if (editingShoe) payload.set('id', editingShoe._id)
@@ -126,7 +185,7 @@ export function ShoeFormModal({
       setResult(actionResult)
 
       if (actionResult.status === 'success') {
-        onClose()
+        handleClose()
       }
     })
   }
@@ -138,7 +197,7 @@ export function ShoeFormModal({
       aria-modal="true"
       aria-labelledby="shoe-modal-title"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
+        if (event.target === event.currentTarget) handleClose()
       }}
     >
       <div
@@ -151,7 +210,7 @@ export function ShoeFormModal({
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="إغلاق"
             className="flex size-9 items-center justify-center rounded-full text-brand-500 transition hover:bg-brand-50 hover:text-brand-800"
           >
@@ -263,19 +322,57 @@ export function ShoeFormModal({
           </Field>
 
           <Field
-            label="رابط صورة الحذاء في Sanity"
+            label="صورة الحذاء من الجهاز"
             htmlFor="shoe-image"
-            hint="انسخ مُعرّف الأصل (image-...) أو رابطه من لوحة Sanity."
+            hint={
+              editingShoe?.imageRef
+                ? 'اختر صورة جديدة لاستبدال الحالية، أو اترك الحقل فارغًا للاحتفاظ بها.'
+                : 'الصيغ المدعومة: JPEG وPNG وWebP وAVIF، بحد أقصى 4 ميغابايت.'
+            }
           >
             <input
+              ref={imageInputRef}
               id="shoe-image"
-              type="text"
-              value={form.imageUrl}
-              onChange={(event) => update('imageUrl', event.target.value)}
-              placeholder="image-abc123-2000x3000-jpg"
+              type="file"
+              accept={SHOE_IMAGE_MIME_TYPES.join(',')}
+              required={!editingShoe?.imageRef && !form.imageFile}
+              onChange={handleImageChange}
               className={inputClassName}
-              dir="ltr"
             />
+            {(imagePreviewUrl || editingShoe?.imageRef) && (
+              <div className="mt-3 flex items-center gap-3">
+                {imagePreviewUrl ? (
+                  <Image
+                    src={imagePreviewUrl}
+                    alt={form.title || 'معاينة صورة الحذاء'}
+                    width={112}
+                    height={112}
+                    unoptimized
+                    className="size-28 rounded-xl border border-brand-100 object-cover"
+                  />
+                ) : (
+                  editingShoe?.imageRef && (
+                    <Image
+                      src={editingShoe.imageRef}
+                      alt={form.title || 'صورة الحذاء الحالية'}
+                      width={112}
+                      height={112}
+                      loader={sanityImageLoader}
+                      className="size-28 rounded-xl border border-brand-100 object-cover"
+                    />
+                  )
+                )}
+                {form.imageFile && (
+                  <button
+                    type="button"
+                    onClick={clearImageSelection}
+                    className="text-sm font-semibold text-rose-700 underline"
+                  >
+                    إزالة الصورة المختارة
+                  </button>
+                )}
+              </div>
+            )}
           </Field>
 
           <Field label="الوصف" htmlFor="shoe-description">
@@ -315,7 +412,7 @@ export function ShoeFormModal({
           <div className="flex flex-col-reverse gap-3 border-t border-brand-100 pt-4 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="rounded-xl border border-brand-200 px-5 py-2.5 text-sm font-bold text-brand-700 transition hover:bg-brand-50"
             >
               إلغاء

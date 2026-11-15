@@ -39,7 +39,7 @@ export interface CreateShoeInput {
   description: string
   isAvailable: boolean
   exhibitionId: string
-  imageUrl?: string
+  imageFile?: File
 }
 
 /** Payload accepted by the "update shoe" server action. */

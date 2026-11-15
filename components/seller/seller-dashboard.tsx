@@ -100,12 +100,13 @@ export function SellerDashboard({exhibitions, shoes}: SellerDashboardProps) {
         <ShoesTable shoes={exhibitionShoes} onEdit={openEditModal} />
       </div>
 
-      <ShoeFormModal
-        open={isModalOpen}
-        onClose={closeModal}
-        exhibitions={exhibitions}
-        editingShoe={editingShoe}
-      />
+      {isModalOpen && (
+        <ShoeFormModal
+          onClose={closeModal}
+          exhibitions={exhibitions}
+          editingShoe={editingShoe}
+        />
+      )}
     </section>
   )
 }

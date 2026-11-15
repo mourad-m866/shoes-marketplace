@@ -2,32 +2,19 @@
 
 import { revalidatePath, updateTag } from 'next/cache'
 
-import { SHOE_CATEGORIES, SHOE_SIZES } from '@/lib/constants'
+import {
+  MAX_SHOE_IMAGE_SIZE,
+  SHOE_CATEGORIES,
+  SHOE_IMAGE_MIME_TYPES,
+  SHOE_SIZES,
+} from '@/lib/constants'
 import { getApprovedSellerExhibitionId } from '@/lib/seller-session'
 import type { ActionResult } from '@/lib/types'
 
 import { shoeExhibitionQuery } from '../lib/queries'
 import { writeClient } from '../lib/write-client'
 
-/**
- * Turns an uploaded image reference into a Sanity image field.
- *
- * The seller form accepts either a raw Sanity asset id
- * (`image-<hash>-2000x3000-jpg`) or a full asset URL
- * (`https://cdn.sanity.io/images/<project>/<dataset>/<assetId>`), so the
- * same value can be pasted from the Sanity Studio asset panel.
- */
-function buildImageField(imageUrl: string | undefined) {
-  if (!imageUrl) return undefined
-
-  const assetId = imageUrl
-    .split('/')
-    .pop()
-    ?.split('?')[0]
-    ?.replace(/-(jpe?g|png|webp|avif|gif)$/i, '')
-
-  if (!assetId) return undefined
-
+function buildImageField(assetId: string) {
   return {
     _type: 'image' as const,
     asset: {
@@ -35,6 +22,23 @@ function buildImageField(imageUrl: string | undefined) {
       _ref: assetId,
     },
   }
+}
+
+function readImageFile(value: FormDataEntryValue | null): File | null {
+  if (typeof File === 'undefined' || !(value instanceof File) || value.size === 0) {
+    return null
+  }
+
+  return value
+}
+
+async function uploadShoeImage(file: File) {
+  const buffer = Buffer.from(await file.arrayBuffer())
+
+  return writeClient.assets.upload('image', buffer, {
+    filename: file.name,
+    contentType: file.type,
+  })
 }
 
 function parseSizes(value: FormDataEntryValue | null): number[] {
@@ -57,18 +61,32 @@ function readFormValues(formData: FormData) {
     price: Number(formData.get('price') ?? Number.NaN),
     exhibitionId: String(formData.get('exhibitionId') ?? '').trim(),
     description: String(formData.get('description') ?? '').trim(),
-    imageUrl: String(formData.get('imageUrl') ?? '').trim(),
+    imageFile: readImageFile(formData.get('imageFile')),
     sizes: parseSizes(formData.get('sizes')),
     isAvailable: formData.get('isAvailable') === 'on',
   }
 }
 
-function validate(values: ReturnType<typeof readFormValues>): string | null {
+function validate(
+  values: ReturnType<typeof readFormValues>,
+  requireImage: boolean,
+): string | null {
   if (!values.title) return 'اسم الحذاء مطلوب.'
   if (!values.exhibitionId) return 'يجب اختيار المعرض.'
   if (!isValidCategory(values.category)) return 'الفئة غير صحيحة.'
   if (!Number.isFinite(values.price) || values.price <= 0) {
     return 'السعر غير صحيح.'
+  }
+
+  if (requireImage && !values.imageFile) return 'اختر صورة للحذاء من جهازك.'
+  if (
+    values.imageFile &&
+    !SHOE_IMAGE_MIME_TYPES.some((type) => type === values.imageFile?.type)
+  ) {
+    return 'صيغة الصورة غير مدعومة. استخدم JPEG أو PNG أو WebP أو AVIF.'
+  }
+  if (values.imageFile && values.imageFile.size > MAX_SHOE_IMAGE_SIZE) {
+    return 'يجب ألا يتجاوز حجم الصورة 4 ميغابايت.'
   }
 
   return null
@@ -93,12 +111,10 @@ function refreshShoeData() {
 export async function createShoe(formData: FormData): Promise<ActionResult> {
   const values = readFormValues(formData)
 
-  const error = validate(values)
+  const error = validate(values, true)
   if (error) {
     return {status: 'error', message: error}
   }
-
-  const image = buildImageField(values.imageUrl)
 
   try {
     const sellerExhibitionId = await getApprovedSellerExhibitionId()
@@ -109,6 +125,12 @@ export async function createShoe(formData: FormData): Promise<ActionResult> {
       return {status: 'error', message: 'لا يمكنك إضافة أحذية إلى معرض آخر.'}
     }
 
+    if (!values.imageFile) {
+      return {status: 'error', message: 'اختر صورة للحذاء من جهازك.'}
+    }
+
+    const imageAsset = await uploadShoeImage(values.imageFile)
+
     const created = await writeClient.create({
       _type: 'shoe',
       title: values.title,
@@ -118,7 +140,7 @@ export async function createShoe(formData: FormData): Promise<ActionResult> {
       },
       category: values.category,
       price: values.price,
-      ...(image ? {image} : {}),
+      image: buildImageField(imageAsset._id),
       sizes: values.sizes,
       description: values.description,
       isAvailable: values.isAvailable,
@@ -151,12 +173,10 @@ export async function updateShoe(formData: FormData): Promise<ActionResult> {
 
   const values = readFormValues(formData)
 
-  const error = validate(values)
+  const error = validate(values, false)
   if (error) {
     return {status: 'error', message: error}
   }
-
-  const image = buildImageField(values.imageUrl)
 
   try {
     const sellerExhibitionId = await getApprovedSellerExhibitionId()
@@ -167,13 +187,23 @@ export async function updateShoe(formData: FormData): Promise<ActionResult> {
       return {status: 'error', message: 'لا يمكنك تعديل أحذية معرض آخر.'}
     }
 
-    const shoe = await writeClient.fetch<{exhibitionId?: string} | null>(
+    const shoe = await writeClient.fetch<
+      {exhibitionId?: string; imageRef?: string} | null
+    >(
       shoeExhibitionQuery,
       {shoeId: id},
     )
     if (shoe?.exhibitionId !== sellerExhibitionId) {
       return {status: 'error', message: 'لا يمكنك تعديل أحذية معرض آخر.'}
     }
+
+    if (!values.imageFile && !shoe.imageRef) {
+      return {status: 'error', message: 'اختر صورة للحذاء من جهازك.'}
+    }
+
+    const image = values.imageFile
+      ? buildImageField((await uploadShoeImage(values.imageFile))._id)
+      : undefined
 
     await writeClient
       .patch(id)

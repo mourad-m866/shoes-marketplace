@@ -40,3 +40,5 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 Activation requests and seller sign-in use an international WhatsApp phone number. In Sanity Studio, the **فتح واتساب لإرسال رسالة التفعيل** action opens WhatsApp with a prefilled message; an administrator must review and send it.
 
 Enter phone numbers in international format beginning with `+` and the country code. Existing activation requests without a phone number must be updated before they can be activated. The WhatsApp action requires a published, approved request with a valid phone and activation code.
+
+Sellers can upload shoe images from their device as JPEG, PNG, WebP, or AVIF files up to 4 MB.
