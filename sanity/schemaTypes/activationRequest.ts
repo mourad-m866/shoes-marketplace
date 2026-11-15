@@ -2,6 +2,7 @@ import {defineField, defineType} from 'sanity'
 import {UserIcon} from '@sanity/icons/User'
 
 import {isValidInternationalPhone} from '@/lib/phone'
+import {ActivationRequestCodeInput} from '../components/activation-request-code-input'
 import {PhoneInput} from '../components/phone-input'
 
 export const activationRequest = defineType({
@@ -53,8 +54,10 @@ export const activationRequest = defineType({
     defineField({
       name: 'accessCode',
       title: 'كود التفعيل',
-      description: 'يُستخدم هذا الكود للتحقق من العارض وإتمام إنشاء المعرض.',
+      description:
+        'أنشئ كودًا عشوائيًا من 12 حرفًا ورقمًا، ثم أرسله للعارض عبر واتساب.',
       type: 'string',
+      components: {input: ActivationRequestCodeInput},
       validation: (rule) =>
         rule.max(128).custom((value, context) =>
           context.document?.status === 'approved' && !value

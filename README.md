@@ -41,4 +41,6 @@ Activation requests and seller sign-in use an international WhatsApp phone numbe
 
 Enter phone numbers in international format beginning with `+` and the country code. Existing activation requests without a phone number must be updated before they can be activated. The WhatsApp action requires a published, approved request with a valid phone and activation code.
 
+Generate the activation code from the activation request in Sanity Studio. The generator creates a random 12-character code; the exhibition stores its hash automatically when the seller completes registration.
+
 Sellers can upload shoe images from their device as JPEG, PNG, WebP, or AVIF files up to 4 MB.

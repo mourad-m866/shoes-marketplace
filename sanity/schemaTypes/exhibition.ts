@@ -2,7 +2,6 @@ import { defineField, defineType } from 'sanity'
 import { TrolleyIcon } from '@sanity/icons/Trolley'
 
 import { isValidInternationalPhone } from '@/lib/phone'
-import { AccessCodeInput } from '../components/access-code-input'
 import { PhoneInput } from '../components/phone-input'
 
 /**
@@ -58,10 +57,9 @@ export const exhibition = defineType({
     defineField({
       name: 'accessCode',
       title: 'كود ترخيص العارض',
-      description:
-        'أدخل كودًا عشوائيًا لا يقل عن 20 حرفًا. يُحفظ بصيغة مشفّرة؛ انسخه وشاركه مع العارض قبل مغادرة الحقل.',
       type: 'string',
-      components: {input: AccessCodeInput},
+      description: 'يُحفظ تلقائيًا بصيغة مشفّرة عند إكمال العارض للتسجيل.',
+      hidden: true,
       validation: (rule) =>
         rule.regex(/^[a-f0-9]{64}$/).error('أدخل كود ترخيص عبر الحقل المخصص.'),
     }),
