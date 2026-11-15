@@ -41,10 +41,15 @@ export async function POST(request: Request): Promise<Response> {
   const apiKey = process.env.RESEND_API_KEY
   const sender = process.env.ACTIVATION_EMAIL_FROM
   if (!apiKey || !sender) {
-    console.error(
-      '[sendActivationEmail] RESEND_API_KEY or ACTIVATION_EMAIL_FROM is missing',
+    const missingSettings = [
+      !apiKey && 'RESEND_API_KEY',
+      !sender && 'ACTIVATION_EMAIL_FROM',
+    ].filter(Boolean)
+    console.error('[sendActivationEmail] missing environment settings', missingSettings)
+    return jsonResponse(
+      `إعداد البريد ناقص: ${missingSettings.join(' و ')}. أضف المتغيرات في Vercel ثم أعد النشر.`,
+      500,
     )
-    return jsonResponse('إعداد خدمة البريد غير مكتمل. يرجى مراجعة إعدادات الموقع.', 500)
   }
 
   let activationRequest: ActivationRequestDocument | null
