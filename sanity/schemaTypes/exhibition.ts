@@ -28,12 +28,6 @@ export const exhibition = defineType({
       validation: (rule) => rule.required().min(2).max(120),
     }),
     defineField({
-      name: 'email',
-      title: 'البريد الإلكتروني للعارض',
-      type: 'string',
-      validation: (rule) => rule.email(),
-    }),
-    defineField({
       name: 'activationRequest',
       title: 'طلب التفعيل',
       type: 'reference',

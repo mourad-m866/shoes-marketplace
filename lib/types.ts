@@ -10,7 +10,6 @@ export interface Exhibition {
   _id: string
   storeName: string
   sellerName: string
-  email?: string
   city: string
   phone: string
   description?: string

@@ -14,14 +14,13 @@ const inputClassName =
   'w-full rounded-xl border border-brand-200 bg-brand-50/60 px-4 py-3 text-sm text-brand-950 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20'
 
 const successMessage =
-  'تم إرسال طلبك بنجاح إلى الإدارة، سيتم التواصل معك عبر بريدك الإلكتروني لتزويدك برابط وكود إتمام إنشاء معرضك.'
+  'تم إرسال طلبك بنجاح إلى الإدارة، سيتم التواصل معك عبر واتساب على الرقم المسجل.'
 
 export function SellerAccessGate() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<'request' | 'activate'>('request')
   const [isSetupMode, setIsSetupMode] = useState(false)
   const [sellerName, setSellerName] = useState('')
-  const [email, setEmail] = useState('')
   const [suggestedStoreName, setSuggestedStoreName] = useState('')
   const [accessCode, setAccessCode] = useState('')
   const [city, setCity] = useState('')
@@ -37,7 +36,7 @@ export function SellerAccessGate() {
     startTransition(async () => {
       const result = await submitActivationRequest({
         sellerName,
-        email,
+        phone,
         storeName: suggestedStoreName,
       })
       setRequestResult(result)
@@ -48,7 +47,7 @@ export function SellerAccessGate() {
     event.preventDefault()
 
     startTransition(async () => {
-      const result = await authenticateSeller(email, accessCode)
+      const result = await authenticateSeller(phone, accessCode)
       setActivationResult(result)
       if (result.status === 'setup') {
         setIsSetupMode(true)
@@ -65,11 +64,10 @@ export function SellerAccessGate() {
 
     startTransition(async () => {
       const result = await completeSellerRegistration({
-        email,
+        phone,
         accessCode,
         storeName: suggestedStoreName,
         city,
-        phone,
       })
       setActivationResult(result)
       setIsSetupMode(result.status === 'error')
@@ -93,7 +91,7 @@ export function SellerAccessGate() {
             بوابة العارضين
           </h1>
           <p className="mt-2 text-sm leading-7 text-brand-100">
-            اطلب تفعيل معرضك أو أكمل الدخول باستخدام بيانات التفعيل التي وصلتك.
+            اطلب تفعيل معرضك أو أكمل الدخول باستخدام رقم الهاتف وكود التفعيل.
           </p>
         </div>
 
@@ -137,7 +135,7 @@ export function SellerAccessGate() {
                 طلب تفعيل معرض جديد
               </h2>
               <p className="mt-2 text-sm leading-7 text-brand-600">
-                اترك بياناتك لتراجع الإدارة طلبك وتتواصل معك عبر البريد الإلكتروني.
+                اترك بياناتك لتراجع الإدارة طلبك وتتواصل معك عبر واتساب.
               </p>
 
               {requestResult?.status === 'success' ? (
@@ -163,14 +161,17 @@ export function SellerAccessGate() {
                     />
                   </label>
                   <label className="block space-y-2 text-sm font-semibold text-brand-800">
-                    <span>البريد الإلكتروني</span>
+                    <span>رقم واتساب مع رمز الدولة</span>
                     <input
-                      type="email"
-                      autoComplete="email"
+                      type="tel"
+                      autoComplete="tel"
+                      inputMode="tel"
                       required
-                      maxLength={254}
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
+                      maxLength={16}
+                      pattern="\\+[1-9][0-9]{7,14}"
+                      title="أدخل الرقم الدولي مع علامة + ورمز الدولة."
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
                       className={inputClassName}
                       dir="ltr"
                     />
@@ -234,20 +235,6 @@ export function SellerAccessGate() {
                     className={inputClassName}
                   />
                 </label>
-                <label className="block space-y-2 text-sm font-semibold text-brand-800">
-                  <span>رقم الهاتف</span>
-                  <input
-                    type="tel"
-                    required
-                    minLength={6}
-                    maxLength={30}
-                    autoComplete="tel"
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                    className={inputClassName}
-                    dir="ltr"
-                  />
-                </label>
                 {activationResult?.status === 'error' && (
                   <p role="alert" className="text-sm leading-6 text-rose-700">
                     {activationResult.message}
@@ -269,7 +256,7 @@ export function SellerAccessGate() {
                 }}
                 className="mt-4 text-sm font-semibold text-brand-600 underline underline-offset-4"
               >
-                استخدام بريد أو كود آخر
+                استخدام رقم أو كود آخر
               </button>
             </div>
           ) : (
@@ -278,18 +265,19 @@ export function SellerAccessGate() {
                 لدي كود تفعيل مسبق
               </h2>
               <p className="mt-2 text-sm leading-7 text-brand-600">
-                أدخل البريد الإلكتروني الذي قدمت به الطلب وكود التفعيل المرسل إليك.
+                أدخل رقم واتساب الذي قدمت به الطلب وكود التفعيل.
               </p>
               <form onSubmit={handleVerifySubmit} className="mt-6 space-y-4">
                 <label className="block space-y-2 text-sm font-semibold text-brand-800">
-                  <span>البريد الإلكتروني</span>
+                  <span>رقم الهاتف المسجل</span>
                   <input
-                    type="email"
-                    autoComplete="email"
+                    type="tel"
+                    autoComplete="tel"
+                    inputMode="tel"
                     required
-                    maxLength={254}
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
+                    maxLength={30}
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
                     className={inputClassName}
                     dir="ltr"
                   />

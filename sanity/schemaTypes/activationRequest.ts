@@ -14,10 +14,16 @@ export const activationRequest = defineType({
       validation: (rule) => rule.required().min(2).max(120),
     }),
     defineField({
-      name: 'email',
-      title: 'البريد الإلكتروني',
+      name: 'phone',
+      title: 'رقم واتساب',
+      description: 'أدخل الرقم بصيغته الدولية مع رمز الدولة، بدءًا من علامة +.',
       type: 'string',
-      validation: (rule) => rule.required().email(),
+      validation: (rule) =>
+        rule.required().max(16).custom((value) =>
+          typeof value === 'string' && /^\+[1-9]\d{7,14}$/.test(value)
+            ? true
+            : 'أدخل رقم واتساب دوليًا يبدأ بـ + ورمز الدولة.',
+        ),
     }),
     defineField({
       name: 'storeName',
@@ -71,7 +77,7 @@ export const activationRequest = defineType({
   preview: {
     select: {
       title: 'sellerName',
-      subtitle: 'email',
+      subtitle: 'phone',
       status: 'status',
     },
     prepare({title, subtitle, status}) {

@@ -3,6 +3,11 @@
 import { createHash } from 'node:crypto'
 
 import type { ActionResult, Exhibition, SellerActivationResult } from '@/lib/types'
+import {
+  isValidInternationalPhone,
+  isValidLoginPhone,
+  normalizePhone,
+} from '@/lib/phone'
 import { setSellerSession } from '@/lib/seller-session'
 import {
   approvedActivationRequestQuery,
@@ -17,7 +22,7 @@ const INVALID_CODE_MESSAGE =
 interface ActivationRequest {
   _id: string
   _rev: string
-  email: string
+  phone: string
   sellerName: string
   storeName?: string
   accessCode: string
@@ -26,24 +31,15 @@ interface ActivationRequest {
 
 interface ActivationRequestInput {
   sellerName: string
-  email: string
+  phone: string
   storeName?: string
 }
 
 interface ExhibitionSetupInput {
-  email: string
+  phone: string
   accessCode: string
   storeName: string
   city: string
-  phone: string
-}
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase()
-}
-
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
 function hashAccessCode(accessCode: string): string {
@@ -51,12 +47,12 @@ function hashAccessCode(accessCode: string): string {
 }
 
 async function findActivationRequest(
-  email: string,
+  phone: string,
   accessCode: string,
 ): Promise<ActivationRequest | null> {
   const matches = await writeClient.fetch<ActivationRequest[]>(
     approvedActivationRequestQuery,
-    {email, accessCode},
+    {phone, accessCode},
   )
 
   return matches.length === 1 ? matches[0] : null
@@ -69,7 +65,7 @@ async function findActivationExhibition(
   if (exhibitionId) {
     const exhibition = await writeClient.fetch<Exhibition | null>(
       `*[_type == "exhibition" && _id == $exhibitionId && isApproved == true][0]{
-        _id, email, storeName, sellerName, city, phone, description, "logoRef": logo.asset._ref
+        _id, storeName, sellerName, city, phone, description, "logoRef": logo.asset._ref
       }`,
       {exhibitionId},
     )
@@ -86,21 +82,21 @@ function validRequestInput(input: ActivationRequestInput): string | null {
   if (
     !input ||
     typeof input.sellerName !== 'string' ||
-    typeof input.email !== 'string' ||
+    typeof input.phone !== 'string' ||
     (input.storeName !== undefined && typeof input.storeName !== 'string')
   ) {
     return 'يرجى إدخال بيانات صحيحة.'
   }
 
   const sellerName = input.sellerName.trim()
-  const email = normalizeEmail(input.email)
+  const phone = normalizePhone(input.phone)
   const storeName = input.storeName?.trim() ?? ''
 
   if (sellerName.length < 2 || sellerName.length > 120) {
     return 'يرجى إدخال اسم عارض صحيح.'
   }
-  if (!isValidEmail(email) || email.length > 254) {
-    return 'يرجى إدخال بريد إلكتروني صحيح.'
+  if (!isValidInternationalPhone(phone)) {
+    return 'يرجى إدخال رقم واتساب دولي صحيح يبدأ بـ + ورمز الدولة.'
   }
   if (storeName.length > 120) {
     return 'اسم المعرض أطول من الحد المسموح.'
@@ -116,14 +112,14 @@ export async function submitActivationRequest(
   if (error) return {status: 'error', message: error}
 
   const sellerName = input.sellerName.trim()
-  const email = normalizeEmail(input.email)
+  const phone = normalizePhone(input.phone)
   const storeName = input.storeName?.trim() ?? ''
 
   try {
     await writeClient.create({
       _type: 'activationRequest',
       sellerName,
-      email,
+      phone,
       ...(storeName ? {storeName} : {}),
       status: 'pending',
       createdAt: new Date().toISOString(),
@@ -140,28 +136,28 @@ export async function submitActivationRequest(
 }
 
 export async function authenticateSeller(
-  submittedEmail: string,
+  submittedPhone: string,
   submittedCode: string,
 ): Promise<SellerActivationResult> {
-  if (typeof submittedEmail !== 'string' || typeof submittedCode !== 'string') {
+  if (typeof submittedPhone !== 'string' || typeof submittedCode !== 'string') {
     return {status: 'error', message: INVALID_CODE_MESSAGE}
   }
 
-  const email = normalizeEmail(submittedEmail)
+  const phone = normalizePhone(submittedPhone)
   const accessCode = submittedCode.trim()
-  if (!isValidEmail(email) || email.length > 254 || !accessCode || accessCode.length > 128) {
+  if (!isValidLoginPhone(phone) || !accessCode || accessCode.length > 128) {
     return {status: 'error', message: INVALID_CODE_MESSAGE}
   }
 
   try {
-    const activationRequest = await findActivationRequest(email, accessCode)
+    const activationRequest = await findActivationRequest(phone, accessCode)
     if (activationRequest) {
       const exhibition = await findActivationExhibition(
         activationRequest._id,
         activationRequest.exhibitionId,
       )
       if (exhibition) {
-        if (exhibition.email && normalizeEmail(exhibition.email) !== email) {
+        if (normalizePhone(exhibition.phone) !== phone) {
           return {status: 'error', message: INVALID_CODE_MESSAGE}
         }
         await setSellerSession(exhibition._id)
@@ -181,10 +177,7 @@ export async function authenticateSeller(
       {accessCodeHash: hashAccessCode(accessCode)},
     )
 
-    if (matches.length !== 1) {
-      return {status: 'error', message: INVALID_CODE_MESSAGE}
-    }
-    if (matches[0].email && normalizeEmail(matches[0].email) !== email) {
+    if (matches.length !== 1 || normalizePhone(matches[0].phone) !== phone) {
       return {status: 'error', message: INVALID_CODE_MESSAGE}
     }
 
@@ -204,24 +197,22 @@ export async function completeSellerRegistration(
 ): Promise<ActionResult> {
   if (
     !input ||
-    typeof input.email !== 'string' ||
+    typeof input.phone !== 'string' ||
     typeof input.accessCode !== 'string' ||
     typeof input.storeName !== 'string' ||
-    typeof input.city !== 'string' ||
-    typeof input.phone !== 'string'
+    typeof input.city !== 'string'
   ) {
     return {status: 'error', message: 'يرجى إدخال بيانات صحيحة.'}
   }
 
-  const email = normalizeEmail(input.email)
-  if (!isValidEmail(email) || email.length > 254) {
-    return {status: 'error', message: 'يرجى إدخال بريد إلكتروني صحيح.'}
+  const setupPhone = normalizePhone(input.phone)
+  if (!isValidInternationalPhone(setupPhone)) {
+    return {status: 'error', message: 'يرجى إدخال رقم واتساب دولي صحيح.'}
   }
 
   const accessCode = input.accessCode.trim()
   const storeName = input.storeName.trim()
   const city = input.city.trim()
-  const phone = input.phone.trim()
 
   if (!accessCode || accessCode.length > 128) {
     return {status: 'error', message: INVALID_CODE_MESSAGE}
@@ -232,12 +223,12 @@ export async function completeSellerRegistration(
   if (city.length < 2 || city.length > 80) {
     return {status: 'error', message: 'يرجى إدخال مدينة صحيحة.'}
   }
-  if (phone.length < 6 || phone.length > 30) {
-    return {status: 'error', message: 'يرجى إدخال رقم هاتف صحيح.'}
+  if (!isValidInternationalPhone(setupPhone)) {
+    return {status: 'error', message: 'يرجى إدخال رقم واتساب دولي صحيح.'}
   }
 
   try {
-    const activationRequest = await findActivationRequest(email, accessCode)
+    const activationRequest = await findActivationRequest(setupPhone, accessCode)
     if (!activationRequest) {
       return {status: 'error', message: INVALID_CODE_MESSAGE}
     }
@@ -247,10 +238,7 @@ export async function completeSellerRegistration(
       activationRequest.exhibitionId,
     )
     if (existingExhibition) {
-      if (
-        existingExhibition.email &&
-        normalizeEmail(existingExhibition.email) !== email
-      ) {
+      if (normalizePhone(existingExhibition.phone) !== setupPhone) {
         return {status: 'error', message: INVALID_CODE_MESSAGE}
       }
       await setSellerSession(existingExhibition._id)
@@ -261,9 +249,8 @@ export async function completeSellerRegistration(
       _type: 'exhibition',
       storeName,
       sellerName: activationRequest.sellerName,
-      email,
       city,
-      phone,
+      phone: setupPhone,
       accessCode: hashAccessCode(accessCode),
       isApproved: true,
       activationRequest: {

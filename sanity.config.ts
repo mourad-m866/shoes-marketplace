@@ -16,7 +16,7 @@ import {
   DeleteActivationRequestAction,
   DeleteExhibitionAction,
 } from './sanity/actions/delete-linked-documents'
-import {SendActivationEmailAction} from './sanity/actions/send-activation-email'
+import {SendActivationWhatsAppAction} from './sanity/actions/send-activation-whatsapp'
 
 export default defineConfig({
   basePath: '/studio',
@@ -37,7 +37,7 @@ export default defineConfig({
           ...previous.map((action) =>
             action.action === 'delete' ? DeleteActivationRequestAction : action,
           ),
-          SendActivationEmailAction,
+          SendActivationWhatsAppAction,
         ]
       }
 

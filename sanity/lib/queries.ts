@@ -40,7 +40,6 @@ export const shoesQuery = defineQuery(`
 export const sellerExhibitionByCodeQuery = defineQuery(`
   *[_type == "exhibition" && isApproved == true && accessCode == $accessCodeHash][0...2] {
     _id,
-    email,
     storeName,
     sellerName,
     city,
@@ -51,10 +50,10 @@ export const sellerExhibitionByCodeQuery = defineQuery(`
 `)
 
 export const approvedActivationRequestQuery = defineQuery(`
-  *[_type == "activationRequest" && status == "approved" && lower(email) == $email && accessCode == $accessCode][0...2] {
+  *[_type == "activationRequest" && status == "approved" && phone == $phone && accessCode == $accessCode][0...2] {
     _id,
     _rev,
-    email,
+    phone,
     sellerName,
     storeName,
     accessCode,
@@ -65,7 +64,6 @@ export const approvedActivationRequestQuery = defineQuery(`
 export const sellerExhibitionByActivationRequestQuery = defineQuery(`
   *[_type == "exhibition" && activationRequest._ref == $requestId && isApproved == true][0] {
     _id,
-    email,
     storeName,
     sellerName,
     city,
@@ -78,7 +76,6 @@ export const sellerExhibitionByActivationRequestQuery = defineQuery(`
 export const approvedSellerExhibitionQuery = defineQuery(`
   *[_type == "exhibition" && _id == $exhibitionId && isApproved == true][0] {
     _id,
-    email,
     storeName,
     sellerName,
     city,
