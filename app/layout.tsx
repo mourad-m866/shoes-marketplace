@@ -1,6 +1,8 @@
+import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import { Cairo } from 'next/font/google'
 
+import { SiteFooter } from '@/components/site-footer'
 import { SanityLive } from '@/sanity/lib/live'
 
 import './globals.css'
@@ -28,6 +30,9 @@ export default function RootLayout({
     <html lang="ar" dir="rtl" className={`${cairo.variable} h-full antialiased`}>
       <body className="min-h-full bg-[var(--background)] font-sans text-[var(--foreground)]">
         {children}
+        <Suspense fallback={null}>
+          <SiteFooter />
+        </Suspense>
         {/* Draft preview is not enabled, so `includeDrafts` stays false. */}
         <SanityLive includeDrafts={false} />
       </body>
