@@ -15,9 +15,6 @@ import {isValidInternationalPhone, normalizePhone} from '@/lib/phone'
 const inputClassName =
   'w-full rounded-xl border border-brand-200 bg-brand-50/60 px-4 py-3 text-sm text-brand-950 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20'
 
-const successMessage =
-  'تم إرسال طلبك بنجاح إلى الإدارة، سيتم التواصل معك عبر واتساب على الرقم المسجل.'
-
 export function SellerAccessGate() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<'request' | 'activate'>('request')
@@ -36,11 +33,15 @@ export function SellerAccessGate() {
     null,
   )
   const [requestLookupError, setRequestLookupError] = useState<string | null>(null)
+  const [hasExistingRequest, setHasExistingRequest] = useState(false)
   const requestLookupAttempt = useRef(0)
 
   function handleRequestPhoneChange(value: string) {
     requestLookupAttempt.current += 1
     setPhone(value.replace(/\s+/g, ''))
+    setSellerName('')
+    setSuggestedStoreName('')
+    setHasExistingRequest(false)
     setRequestLookupMessage(null)
     setRequestLookupError(null)
   }
@@ -55,15 +56,17 @@ export function SellerAccessGate() {
       if (attempt !== requestLookupAttempt.current) return
 
       if (result.status === 'found') {
+        setHasExistingRequest(true)
         setSellerName(result.sellerName)
         setSuggestedStoreName(result.storeName ?? '')
         setRequestLookupMessage(
-          'تم استرجاع بيانات طلبك السابق. يمكنك تعديلها قبل إعادة الإرسال.',
+          'تم استرجاع طلبك السابق. ستبقى بياناته كما هي عند إعادة الإرسال.',
         )
         return
       }
 
       if (result.status === 'not-found') {
+        setHasExistingRequest(false)
         setRequestLookupMessage(
           'لا يوجد طلب سابق لهذا الرقم؛ أكمل البيانات لإرسال طلبك.',
         )
@@ -76,6 +79,7 @@ export function SellerAccessGate() {
 
   function handleRequestSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (isLookupPending) return
 
     startTransition(async () => {
       const result = await submitActivationRequest({
@@ -187,7 +191,7 @@ export function SellerAccessGate() {
                   role="status"
                   className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm font-medium leading-7 text-emerald-900"
                 >
-                  {successMessage}
+                  {requestResult.message}
                 </div>
               ) : (
                 <form onSubmit={handleRequestSubmit} className="mt-6 space-y-4">
@@ -200,6 +204,7 @@ export function SellerAccessGate() {
                       minLength={2}
                       maxLength={120}
                       value={sellerName}
+                      readOnly={hasExistingRequest}
                       onChange={(event) => setSellerName(event.target.value)}
                       className={inputClassName}
                     />
@@ -242,6 +247,7 @@ export function SellerAccessGate() {
                       type="text"
                       maxLength={120}
                       value={suggestedStoreName}
+                      readOnly={hasExistingRequest}
                       onChange={(event) => setSuggestedStoreName(event.target.value)}
                       className={inputClassName}
                     />

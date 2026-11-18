@@ -8,6 +8,7 @@ import {isValidInternationalPhone, normalizePhone} from '@/lib/phone'
 interface ActivationRequestDocument extends SanityDocument {
   sellerName?: string
   phone?: string
+  storeName?: string
   status?: string
   accessCode?: string
 }
@@ -21,6 +22,7 @@ export const SendActivationWhatsAppAction: DocumentActionComponent = (props) => 
     (draft.status === published?.status &&
       draft.phone === published?.phone &&
       draft.sellerName === published?.sellerName &&
+      draft.storeName === published?.storeName &&
       draft.accessCode === published?.accessCode)
   const canSend =
     published?.status === 'approved' &&
@@ -35,7 +37,7 @@ export const SendActivationWhatsAppAction: DocumentActionComponent = (props) => 
     const message = [
       `مرحبًا ${published.sellerName || ''}،`,
       '',
-      'تمت الموافقة على طلب تفعيل معرضك في خطواتك للمعارض.',
+      'تمت الموافقة على طلب تفعيل معرضك في خطواتك للمعارض. استخدم كود التفعيل الجديد أدناه للدخول.',
       `رابط الموقع: ${window.location.origin}/seller`,
       `رقم واتساب: ${published.phone}`,
       `كود التفعيل: ${published.accessCode}`,

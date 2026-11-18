@@ -19,6 +19,8 @@ interface SellerSession {
 interface SellerSessionExhibition extends Exhibition {
   isApproved?: boolean
   activationRequestStatus?: string
+  activationRequestId?: string
+  latestActivationRequest?: {_id?: string; status?: string}
   hasActivationRequest?: boolean
 }
 
@@ -55,6 +57,11 @@ export async function setSellerSession(exhibitionId: string): Promise<void> {
     path: '/',
     maxAge: SESSION_LIFETIME_SECONDS,
   })
+}
+
+export async function clearSellerSession(): Promise<void> {
+  const cookieStore = await cookies()
+  cookieStore.delete(SESSION_COOKIE)
 }
 
 async function readSellerSession(): Promise<SellerSession | null> {
@@ -105,13 +112,19 @@ export async function getSellerAccess(): Promise<SellerAccess> {
   )
 
   if (!exhibition) return {status: 'unavailable'}
-  if (exhibition.activationRequestStatus === 'rejected') {
+  if (
+    exhibition.activationRequestStatus === 'rejected' ||
+    exhibition.latestActivationRequest?.status === 'rejected'
+  ) {
     return {status: 'rejected'}
   }
   if (
     exhibition.isApproved !== true ||
     (exhibition.hasActivationRequest === true &&
-      exhibition.activationRequestStatus !== 'approved')
+      (exhibition.activationRequestStatus !== 'approved' ||
+        exhibition.latestActivationRequest?.status !== 'approved' ||
+        exhibition.latestActivationRequest._id !==
+          exhibition.activationRequestId))
   ) {
     return {status: 'unavailable'}
   }
@@ -136,6 +149,11 @@ export async function getApprovedSellerExhibition(): Promise<Exhibition | null> 
 }
 
 export async function getApprovedSellerExhibitionId(): Promise<string | null> {
-  const exhibition = await getApprovedSellerExhibition()
-  return exhibition?._id ?? null
+  const access = await getSellerAccess()
+  if (access.status !== 'approved') {
+    await clearSellerSession()
+    return null
+  }
+
+  return access.exhibition._id
 }

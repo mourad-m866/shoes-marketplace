@@ -1,13 +1,13 @@
 'use server'
 
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 
 import type { ActionResult, Exhibition, SellerActivationResult } from '@/lib/types'
 import {
   isValidInternationalPhone,
   normalizePhone,
 } from '@/lib/phone'
-import { setSellerSession } from '@/lib/seller-session'
+import { clearSellerSession, setSellerSession } from '@/lib/seller-session'
 import {
   approvedActivationRequestQuery,
   previousActivationRequestByPhoneQuery,
@@ -18,10 +18,10 @@ import { writeClient } from '@/sanity/lib/write-client'
 
 const INVALID_CODE_MESSAGE =
   'عذراً، هذا القسم مخصص للعارضين المرخّصين من الإدارة فقط. يرجى التواصل مع الأدمن للحصول على كود التفعيل.'
+const ACCESS_CODE_CHARACTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
 interface ActivationRequest {
   _id: string
-  _rev: string
   phone: string
   sellerName: string
   storeName?: string
@@ -46,6 +46,12 @@ function hashAccessCode(accessCode: string): string {
   return createHash('sha256').update(accessCode).digest('hex')
 }
 
+function generateAccessCode(): string {
+  return Array.from(randomBytes(12), (byte) =>
+    ACCESS_CODE_CHARACTERS.charAt(byte & 31),
+  ).join('')
+}
+
 async function findActivationRequest(
   phone: string,
   accessCode: string,
@@ -55,7 +61,13 @@ async function findActivationRequest(
     {phone, accessCode},
   )
 
-  return matches.length === 1 ? matches[0] : null
+  if (matches.length !== 1) return null
+
+  const latestRequest = await writeClient.fetch<{_id: string} | null>(
+    previousActivationRequestByPhoneQuery,
+    {phone},
+  )
+  return latestRequest?._id === matches[0]._id ? matches[0] : null
 }
 
 async function findActivationExhibition(
@@ -108,24 +120,60 @@ function validRequestInput(input: ActivationRequestInput): string | null {
 export async function submitActivationRequest(
   input: ActivationRequestInput,
 ): Promise<ActionResult> {
-  const error = validRequestInput(input)
-  if (error) return {status: 'error', message: error}
-
-  const sellerName = input.sellerName.trim()
+  if (!input || typeof input !== 'object' || typeof input.phone !== 'string') {
+    return {status: 'error', message: 'يرجى إدخال بيانات صحيحة.'}
+  }
   const phone = normalizePhone(input.phone)
-  const storeName = input.storeName?.trim() ?? ''
+  if (!isValidInternationalPhone(phone)) {
+    return {
+      status: 'error',
+      message: 'يرجى إدخال رقم واتساب دولي صحيح يبدأ بـ + ورمز الدولة.',
+    }
+  }
 
   try {
-    await writeClient.create({
-      _type: 'activationRequest',
-      sellerName,
-      phone,
-      ...(storeName ? {storeName} : {}),
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    })
+    const existing = await writeClient.fetch<{_id: string} | null>(
+      previousActivationRequestByPhoneQuery,
+      {phone},
+    )
+    const accessCode = generateAccessCode()
 
-    return {status: 'success', message: 'تم إرسال الطلب بنجاح.'}
+    if (existing) {
+      await writeClient
+        .patch(existing._id)
+        .set({status: 'pending', accessCode})
+        .commit()
+    } else {
+      const error = validRequestInput(input)
+      if (error) return {status: 'error', message: error}
+
+      const requestId = `activation-request-${createHash('sha256')
+        .update(phone)
+        .digest('hex')
+        .slice(0, 40)}`
+
+      await writeClient.createIfNotExists({
+        _id: requestId,
+        _type: 'activationRequest',
+        sellerName: input.sellerName.trim(),
+        phone,
+        ...(input.storeName?.trim()
+          ? {storeName: input.storeName.trim()}
+          : {}),
+        status: 'pending',
+        accessCode,
+        createdAt: new Date().toISOString(),
+      })
+      await writeClient.patch(requestId).set({status: 'pending', accessCode}).commit()
+    }
+
+    await clearSellerSession()
+
+    return {
+      status: 'success',
+      message:
+        'تم تحديث طلبك وإرساله للمراجعة. ستحتاج إلى إدخال كود التفعيل الجديد الذي يصلك عبر واتساب بعد الموافقة.',
+    }
   } catch (cause) {
     console.error('[submitActivationRequest] failed', cause)
     return {
@@ -290,7 +338,12 @@ export async function completeSellerRegistration(
       return {status: 'success', message: 'تم تسجيل الدخول إلى معرضك.'}
     }
 
-    const created = await writeClient.create({
+    const exhibitionId = `seller-${createHash('sha256')
+      .update(activationRequest._id)
+      .digest('hex')
+      .slice(0, 40)}`
+    await writeClient.createIfNotExists({
+      _id: exhibitionId,
       _type: 'exhibition',
       storeName,
       sellerName: activationRequest.sellerName,
@@ -307,11 +360,10 @@ export async function completeSellerRegistration(
     try {
       await writeClient
         .patch(activationRequest._id)
-        .ifRevisionId(activationRequest._rev)
         .set({
           exhibition: {
             _type: 'reference',
-            _ref: created._id,
+            _ref: exhibitionId,
           },
         })
         .commit()
@@ -323,8 +375,8 @@ export async function completeSellerRegistration(
         {requestId: activationRequest._id},
       )
       if (latestRequest?.exhibitionId) {
-        if (latestRequest.exhibitionId === created._id) {
-          await setSellerSession(created._id)
+        if (latestRequest.exhibitionId === exhibitionId) {
+          await setSellerSession(exhibitionId)
           return {status: 'success', message: 'تم إنشاء معرضك بنجاح.'}
         }
 
@@ -333,7 +385,6 @@ export async function completeSellerRegistration(
           latestRequest.exhibitionId,
         )
         if (linkedExhibition) {
-          await writeClient.delete(created._id)
           await setSellerSession(linkedExhibition._id)
           return {status: 'success', message: 'تم تسجيل الدخول إلى معرضك.'}
         }
@@ -341,7 +392,7 @@ export async function completeSellerRegistration(
       throw cause
     }
 
-    await setSellerSession(created._id)
+    await setSellerSession(exhibitionId)
     return {status: 'success', message: 'تم إنشاء معرضك بنجاح.'}
   } catch (cause) {
     console.error('[completeSellerRegistration] failed', cause)

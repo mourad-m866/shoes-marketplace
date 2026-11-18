@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { redirect } from 'next/navigation'
 
 import { SellerDashboard } from '@/components/seller/seller-dashboard'
 import { SellerAccessGate } from '@/components/seller/seller-access-gate'
@@ -10,7 +11,11 @@ export const metadata = {
   title: 'لوحة العارض (البائع)',
 }
 
-export default function SellerPage() {
+export default function SellerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{access?: string | string[]}>
+}) {
   return (
     <div className="flex min-h-full flex-col">
       <SiteHeader />
@@ -22,15 +27,25 @@ export default function SellerPage() {
             </p>
           }
         >
-          <SellerPageContent />
+          <SellerPageContent searchParams={searchParams} />
         </Suspense>
       </main>
     </div>
   )
 }
 
-async function SellerPageContent() {
+async function SellerPageContent({
+  searchParams,
+}: {
+  searchParams: Promise<{access?: string | string[]}>
+}) {
+  const params = await searchParams
+  const showRejectedNotice = params.access === 'rejected'
   const access = await getSellerAccess()
+
+  if (access.status === 'rejected' && !showRejectedNotice) {
+    redirect('/seller/revoke')
+  }
 
   return access.status === 'approved' ? (
     <SellerDashboard
@@ -39,13 +54,14 @@ async function SellerPageContent() {
     />
   ) : (
     <>
-      {access.status === 'rejected' && (
+      {(access.status === 'rejected' || showRejectedNotice) && (
         <p
           role="alert"
           className="mx-auto mt-8 max-w-2xl rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-semibold leading-7 text-rose-800"
         >
-          تم رفض طلب تفعيل معرضك من الإدارة. لا يمكنك الوصول إلى لوحة التحكم أو
-          إدارة المنتجات. يمكنك تعديل بياناتك وإرسال طلب جديد أدناه.
+          تم رفض طلب تفعيل معرضك وإلغاء جلستك. لا يمكنك الوصول إلى لوحة التحكم أو
+          إدارة المنتجات. أعد إرسال الطلب، وبعد مراجعته ستحتاج إلى إدخال كود
+          التفعيل الجديد الذي يصلك عبر واتساب.
         </p>
       )}
       <SellerAccessGate />
