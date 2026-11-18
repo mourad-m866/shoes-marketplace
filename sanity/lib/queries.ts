@@ -38,7 +38,7 @@ export const shoesQuery = defineQuery(`
 `)
 
 export const sellerExhibitionByCodeQuery = defineQuery(`
-  *[_type == "exhibition" && isApproved == true && accessCode == $accessCodeHash][0...2] {
+  *[_type == "exhibition" && isApproved == true && accessCode == $accessCodeHash && (!defined(activationRequest._ref) || activationRequest->status == "approved")][0...2] {
     _id,
     storeName,
     sellerName,
@@ -61,8 +61,15 @@ export const approvedActivationRequestQuery = defineQuery(`
   }
 `)
 
+export const previousActivationRequestByPhoneQuery = defineQuery(`
+  *[_type == "activationRequest" && phone == $phone] | order(createdAt desc)[0] {
+    sellerName,
+    storeName
+  }
+`)
+
 export const sellerExhibitionByActivationRequestQuery = defineQuery(`
-  *[_type == "exhibition" && activationRequest._ref == $requestId && isApproved == true][0] {
+  *[_type == "exhibition" && activationRequest._ref == $requestId && activationRequest->status == "approved" && isApproved == true][0] {
     _id,
     storeName,
     sellerName,
@@ -73,15 +80,18 @@ export const sellerExhibitionByActivationRequestQuery = defineQuery(`
   }
 `)
 
-export const approvedSellerExhibitionQuery = defineQuery(`
-  *[_type == "exhibition" && _id == $exhibitionId && isApproved == true][0] {
+export const sellerSessionExhibitionQuery = defineQuery(`
+  *[_type == "exhibition" && _id == $exhibitionId][0] {
     _id,
     storeName,
     sellerName,
     city,
     phone,
     description,
-    "logoRef": logo.asset._ref
+    "logoRef": logo.asset._ref,
+    isApproved,
+    "activationRequestStatus": activationRequest->status,
+    "hasActivationRequest": defined(activationRequest._ref)
   }
 `)
 

@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import { SellerDashboard } from '@/components/seller/seller-dashboard'
 import { SellerAccessGate } from '@/components/seller/seller-access-gate'
 import { SiteHeader } from '@/components/site-header'
-import { getApprovedSellerExhibition } from '@/lib/seller-session'
+import { getSellerAccess } from '@/lib/seller-session'
 import { getSellerShoes } from '@/sanity/lib/data'
 
 export const metadata = {
@@ -30,14 +30,25 @@ export default function SellerPage() {
 }
 
 async function SellerPageContent() {
-  const exhibition = await getApprovedSellerExhibition()
+  const access = await getSellerAccess()
 
-  return exhibition ? (
+  return access.status === 'approved' ? (
     <SellerDashboard
-      exhibitions={[exhibition]}
-      shoes={await getSellerShoes(exhibition._id)}
+      exhibitions={[access.exhibition]}
+      shoes={await getSellerShoes(access.exhibition._id)}
     />
   ) : (
-    <SellerAccessGate />
+    <>
+      {access.status === 'rejected' && (
+        <p
+          role="alert"
+          className="mx-auto mt-8 max-w-2xl rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-semibold leading-7 text-rose-800"
+        >
+          تم رفض طلب تفعيل معرضك من الإدارة. لا يمكنك الوصول إلى لوحة التحكم أو
+          إدارة المنتجات. يمكنك تعديل بياناتك وإرسال طلب جديد أدناه.
+        </p>
+      )}
+      <SellerAccessGate />
+    </>
   )
 }

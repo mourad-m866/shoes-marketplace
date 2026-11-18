@@ -1,14 +1,16 @@
 'use client'
 
-import {useState, useTransition, type FormEvent} from 'react'
+import {useRef, useState, useTransition, type FormEvent} from 'react'
 import {useRouter} from 'next/navigation'
 
 import type {ActionResult, SellerActivationResult} from '@/lib/types'
 import {
   authenticateSeller,
   completeSellerRegistration,
+  getPreviousActivationRequest,
   submitActivationRequest,
 } from '@/sanity/actions/seller-auth'
+import {isValidInternationalPhone, normalizePhone} from '@/lib/phone'
 
 const inputClassName =
   'w-full rounded-xl border border-brand-200 bg-brand-50/60 px-4 py-3 text-sm text-brand-950 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20'
@@ -29,6 +31,48 @@ export function SellerAccessGate() {
   const [activationResult, setActivationResult] =
     useState<SellerActivationResult | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [isLookupPending, startLookupTransition] = useTransition()
+  const [requestLookupMessage, setRequestLookupMessage] = useState<string | null>(
+    null,
+  )
+  const [requestLookupError, setRequestLookupError] = useState<string | null>(null)
+  const requestLookupAttempt = useRef(0)
+
+  function handleRequestPhoneChange(value: string) {
+    requestLookupAttempt.current += 1
+    setPhone(value.replace(/\s+/g, ''))
+    setRequestLookupMessage(null)
+    setRequestLookupError(null)
+  }
+
+  function handleRequestPhoneBlur() {
+    const normalizedPhone = normalizePhone(phone)
+    if (!isValidInternationalPhone(normalizedPhone)) return
+
+    const attempt = ++requestLookupAttempt.current
+    startLookupTransition(async () => {
+      const result = await getPreviousActivationRequest(normalizedPhone)
+      if (attempt !== requestLookupAttempt.current) return
+
+      if (result.status === 'found') {
+        setSellerName(result.sellerName)
+        setSuggestedStoreName(result.storeName ?? '')
+        setRequestLookupMessage(
+          'تم استرجاع بيانات طلبك السابق. يمكنك تعديلها قبل إعادة الإرسال.',
+        )
+        return
+      }
+
+      if (result.status === 'not-found') {
+        setRequestLookupMessage(
+          'لا يوجد طلب سابق لهذا الرقم؛ أكمل البيانات لإرسال طلبك.',
+        )
+        return
+      }
+
+      setRequestLookupError(result.message)
+    })
+  }
 
   function handleRequestSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -171,13 +215,27 @@ export function SellerAccessGate() {
                       pattern="[+][1-9][0-9]{7,14}"
                       title="أدخل الرقم الدولي مع علامة + ورمز الدولة."
                       value={phone}
-                      onChange={(event) =>
-                        setPhone(event.target.value.replace(/\s+/g, ''))
-                      }
+                      onChange={(event) => handleRequestPhoneChange(event.target.value)}
+                      onBlur={handleRequestPhoneBlur}
                       className={inputClassName}
                       dir="ltr"
                     />
                   </label>
+                  {isLookupPending && (
+                    <p role="status" className="text-sm text-brand-600">
+                      جارٍ البحث عن طلب سابق لهذا الرقم…
+                    </p>
+                  )}
+                  {requestLookupMessage && (
+                    <p role="status" className="text-sm leading-6 text-brand-600">
+                      {requestLookupMessage}
+                    </p>
+                  )}
+                  {requestLookupError && (
+                    <p role="alert" className="text-sm leading-6 text-rose-700">
+                      {requestLookupError}
+                    </p>
+                  )}
                   <label className="block space-y-2 text-sm font-semibold text-brand-800">
                     <span>اسم المعرض المقترح (اختياري)</span>
                     <input
@@ -195,10 +253,14 @@ export function SellerAccessGate() {
                   )}
                   <button
                     type="submit"
-                    disabled={isPending}
+                    disabled={isPending || isLookupPending}
                     className="w-full rounded-xl bg-brand-900 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-brand-800 disabled:cursor-wait disabled:opacity-60"
                   >
-                    {isPending ? 'جارٍ إرسال الطلب…' : 'إرسال طلب التفعيل'}
+                    {isLookupPending
+                      ? 'جارٍ استرجاع البيانات…'
+                      : isPending
+                        ? 'جارٍ إرسال الطلب…'
+                        : 'إرسال طلب التفعيل'}
                   </button>
                 </form>
               )}

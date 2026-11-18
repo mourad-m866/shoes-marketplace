@@ -5,7 +5,7 @@ import { cookies } from 'next/headers'
 
 import type { Exhibition } from '@/lib/types'
 import { apiWriteToken } from '@/sanity/env'
-import { approvedSellerExhibitionQuery } from '@/sanity/lib/queries'
+import { sellerSessionExhibitionQuery } from '@/sanity/lib/queries'
 import { writeClient } from '@/sanity/lib/write-client'
 
 const SESSION_COOKIE = 'seller_session'
@@ -15,6 +15,17 @@ interface SellerSession {
   exhibitionId: string
   expiresAt: number
 }
+
+interface SellerSessionExhibition extends Exhibition {
+  isApproved?: boolean
+  activationRequestStatus?: string
+  hasActivationRequest?: boolean
+}
+
+export type SellerAccess =
+  | {status: 'approved'; exhibition: Exhibition}
+  | {status: 'rejected'}
+  | {status: 'unavailable'}
 
 function getSessionSecret(): string {
   if (!apiWriteToken) {
@@ -82,13 +93,46 @@ async function readSellerSession(): Promise<SellerSession | null> {
   }
 }
 
-export async function getApprovedSellerExhibition(): Promise<Exhibition | null> {
+export async function getSellerAccess(): Promise<SellerAccess> {
   const session = await readSellerSession()
-  if (!session) return null
+  if (!session) return {status: 'unavailable'}
 
-  return writeClient.fetch<Exhibition | null>(approvedSellerExhibitionQuery, {
-    exhibitionId: session.exhibitionId,
-  })
+  const exhibition = await writeClient.fetch<SellerSessionExhibition | null>(
+    sellerSessionExhibitionQuery,
+    {
+      exhibitionId: session.exhibitionId,
+    },
+  )
+
+  if (!exhibition) return {status: 'unavailable'}
+  if (exhibition.activationRequestStatus === 'rejected') {
+    return {status: 'rejected'}
+  }
+  if (
+    exhibition.isApproved !== true ||
+    (exhibition.hasActivationRequest === true &&
+      exhibition.activationRequestStatus !== 'approved')
+  ) {
+    return {status: 'unavailable'}
+  }
+
+  return {
+    status: 'approved',
+    exhibition: {
+      _id: exhibition._id,
+      storeName: exhibition.storeName,
+      sellerName: exhibition.sellerName,
+      city: exhibition.city,
+      phone: exhibition.phone,
+      description: exhibition.description,
+      logoRef: exhibition.logoRef,
+    },
+  }
+}
+
+export async function getApprovedSellerExhibition(): Promise<Exhibition | null> {
+  const access = await getSellerAccess()
+  return access.status === 'approved' ? access.exhibition : null
 }
 
 export async function getApprovedSellerExhibitionId(): Promise<string | null> {

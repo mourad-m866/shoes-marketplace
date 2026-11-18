@@ -10,6 +10,7 @@ import {
 import { setSellerSession } from '@/lib/seller-session'
 import {
   approvedActivationRequestQuery,
+  previousActivationRequestByPhoneQuery,
   sellerExhibitionByActivationRequestQuery,
   sellerExhibitionByCodeQuery,
 } from '@/sanity/lib/queries'
@@ -63,7 +64,7 @@ async function findActivationExhibition(
 ): Promise<Exhibition | null> {
   if (exhibitionId) {
     const exhibition = await writeClient.fetch<Exhibition | null>(
-      `*[_type == "exhibition" && _id == $exhibitionId && isApproved == true][0]{
+      `*[_type == "exhibition" && _id == $exhibitionId && isApproved == true && (!defined(activationRequest._ref) || activationRequest->status == "approved")][0]{
         _id, storeName, sellerName, city, phone, description, "logoRef": logo.asset._ref
       }`,
       {exhibitionId},
@@ -130,6 +131,51 @@ export async function submitActivationRequest(
     return {
       status: 'error',
       message: 'تعذّر إرسال الطلب الآن. يرجى المحاولة لاحقًا.',
+    }
+  }
+}
+
+export async function getPreviousActivationRequest(
+  submittedPhone: string,
+): Promise<
+  | {status: 'found'; sellerName: string; storeName?: string}
+  | {status: 'not-found'}
+  | {status: 'error'; message: string}
+> {
+  if (
+    typeof submittedPhone !== 'string' ||
+    !isValidInternationalPhone(normalizePhone(submittedPhone))
+  ) {
+    return {
+      status: 'error',
+      message: 'يرجى إدخال رقم واتساب دولي صحيح لاسترجاع الطلب السابق.',
+    }
+  }
+
+  try {
+    const request = await writeClient.fetch<{
+      sellerName?: string
+      storeName?: string
+    } | null>(previousActivationRequestByPhoneQuery, {
+      phone: normalizePhone(submittedPhone),
+    })
+
+    if (!request || typeof request.sellerName !== 'string') {
+      return {status: 'not-found'}
+    }
+
+    return {
+      status: 'found',
+      sellerName: request.sellerName,
+      ...(typeof request.storeName === 'string'
+        ? {storeName: request.storeName}
+        : {}),
+    }
+  } catch (cause) {
+    console.error('[getPreviousActivationRequest] failed', cause)
+    return {
+      status: 'error',
+      message: 'تعذّر استرجاع الطلب السابق الآن. يرجى المحاولة لاحقًا.',
     }
   }
 }
